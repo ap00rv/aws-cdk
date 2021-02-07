@@ -1,5 +1,6 @@
+import { SubnetSelection } from '@aws-cdk/aws-ec2';
 import { FargatePlatformVersion, FargateService, FargateTaskDefinition } from '@aws-cdk/aws-ecs';
-import { Construct } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import { NetworkLoadBalancedServiceBase, NetworkLoadBalancedServiceBaseProps } from '../base/network-load-balanced-service-base';
 
 /**
@@ -66,6 +67,13 @@ export interface NetworkLoadBalancedFargateServiceProps extends NetworkLoadBalan
   readonly assignPublicIp?: boolean;
 
   /**
+   * The subnets to associate with the service.
+   *
+   * @default - Public subnets if `assignPublicIp` is set, otherwise the first available one of Private, Isolated, Public, in that order.
+   */
+  readonly taskSubnets?: SubnetSelection;
+
+  /**
    * The platform version on which to run your service.
    *
    * If one is not specified, the LATEST platform version is used by default. For more information, see
@@ -98,7 +106,7 @@ export class NetworkLoadBalancedFargateService extends NetworkLoadBalancedServic
   constructor(scope: Construct, id: string, props: NetworkLoadBalancedFargateServiceProps = {}) {
     super(scope, id, props);
 
-    this.assignPublicIp = props.assignPublicIp !== undefined ? props.assignPublicIp : false;
+    this.assignPublicIp = props.assignPublicIp ?? false;
 
     if (props.taskDefinition && props.taskImageOptions) {
       throw new Error('You must specify either a taskDefinition or an image, not both.');
@@ -115,12 +123,10 @@ export class NetworkLoadBalancedFargateService extends NetworkLoadBalancedServic
       });
 
       // Create log driver if logging is enabled
-      const enableLogging = taskImageOptions.enableLogging !== undefined ? taskImageOptions.enableLogging : true;
-      const logDriver = taskImageOptions.logDriver !== undefined
-        ? taskImageOptions.logDriver : enableLogging
-          ? this.createAWSLogDriver(this.node.id) : undefined;
+      const enableLogging = taskImageOptions.enableLogging ?? true;
+      const logDriver = taskImageOptions.logDriver ?? (enableLogging ? this.createAWSLogDriver(this.node.id) : undefined);
 
-      const containerName = taskImageOptions.containerName !== undefined ? taskImageOptions.containerName : 'web';
+      const containerName = taskImageOptions.containerName ?? 'web';
       const container = this.taskDefinition.addContainer(containerName, {
         image: taskImageOptions.image,
         logging: logDriver,
@@ -147,6 +153,8 @@ export class NetworkLoadBalancedFargateService extends NetworkLoadBalancedServic
       enableECSManagedTags: props.enableECSManagedTags,
       cloudMapOptions: props.cloudMapOptions,
       platformVersion: props.platformVersion,
+      deploymentController: props.deploymentController,
+      vpcSubnets: props.taskSubnets,
     });
     this.addServiceAsTarget(this.service);
   }

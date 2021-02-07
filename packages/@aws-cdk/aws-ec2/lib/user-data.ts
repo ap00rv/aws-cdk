@@ -147,7 +147,7 @@ class LinuxUserData extends UserData {
   }
 
   public render(): string {
-    const shebang = this.props.shebang !== undefined ? this.props.shebang : '#!/bin/bash';
+    const shebang = this.props.shebang ?? '#!/bin/bash';
     return [shebang, ...(this.renderOnExitLines()), ...this.lines].join('\n');
   }
 
@@ -166,7 +166,7 @@ class LinuxUserData extends UserData {
     this.addCommands(
       'set -e',
       `chmod +x '${params.filePath}'`,
-      `'${params.filePath}' ${params.arguments}`,
+      `'${params.filePath}' ${params.arguments ?? ''}`.trim(),
     );
   }
 
@@ -222,7 +222,7 @@ class WindowsUserData extends UserData {
 
   public addExecuteFileCommand( params: ExecuteFileOptions): void {
     this.addCommands(
-      `&'${params.filePath}' ${params.arguments}`,
+      `&'${params.filePath}' ${params.arguments ?? ''}`.trim(),
       `if (!$?) { Write-Error 'Failed to execute the file "${params.filePath}"' -ErrorAction Stop }`,
     );
   }

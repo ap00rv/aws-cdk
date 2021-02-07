@@ -1,6 +1,8 @@
 import * as cloudwatch from '@aws-cdk/aws-cloudwatch';
 import * as ec2 from '@aws-cdk/aws-ec2';
-import { Annotations, Construct, Duration, IConstruct } from '@aws-cdk/core';
+import { Annotations, Duration } from '@aws-cdk/core';
+import { IConstruct, Construct } from 'constructs';
+import { ApplicationELBMetrics } from '../elasticloadbalancingv2-canned-metrics.generated';
 import {
   BaseTargetGroupProps, ITargetGroup, loadBalancerNameFromListenerArn, LoadBalancerTargetProps,
   TargetGroupAttributes, TargetGroupBase, TargetGroupImportProps,
@@ -10,6 +12,10 @@ import { ImportedTargetGroupBase } from '../shared/imported';
 import { determineProtocolAndPort } from '../shared/util';
 import { IApplicationListener } from './application-listener';
 import { HttpCodeTarget } from './application-load-balancer';
+
+// keep this import separate from other imports to reduce chance for merge conflicts with v2-main
+// eslint-disable-next-line no-duplicate-imports, import/order
+import { Construct as CoreConstruct } from '@aws-cdk/core';
 
 /**
  * Properties for defining an Application Target Group
@@ -159,7 +165,7 @@ export class ApplicationTargetGroup extends TargetGroupBase implements IApplicat
       listener.registerConnectable(member.connectable, member.portRange);
     }
     this.listeners.push(listener);
-    this.loadBalancerAttachedDependencies.add(associatingConstruct || listener);
+    this.loadBalancerAttachedDependencies.add((associatingConstruct || listener) as CoreConstruct);
   }
 
   /**
@@ -200,10 +206,7 @@ export class ApplicationTargetGroup extends TargetGroupBase implements IApplicat
    * @default Sum over 5 minutes
    */
   public metricIpv6RequestCount(props?: cloudwatch.MetricOptions) {
-    return this.metric('IPv6RequestCount', {
-      statistic: 'Sum',
-      ...props,
-    });
+    return this.cannedMetric(ApplicationELBMetrics.iPv6RequestCountSum, props);
   }
 
   /**
@@ -214,10 +217,7 @@ export class ApplicationTargetGroup extends TargetGroupBase implements IApplicat
    * @default Sum over 5 minutes
    */
   public metricRequestCount(props?: cloudwatch.MetricOptions) {
-    return this.metric('RequestCount', {
-      statistic: 'Sum',
-      ...props,
-    });
+    return this.cannedMetric(ApplicationELBMetrics.requestCountSum, props);
   }
 
   /**
@@ -326,6 +326,18 @@ export class ApplicationTargetGroup extends TargetGroupBase implements IApplicat
     }
 
     return ret;
+  }
+
+  private cannedMetric(
+    fn: (dims: { LoadBalancer: string, TargetGroup: string }) => cloudwatch.MetricProps,
+    props?: cloudwatch.MetricOptions): cloudwatch.Metric {
+    return new cloudwatch.Metric({
+      ...fn({
+        LoadBalancer: this.firstLoadBalancerFullName,
+        TargetGroup: this.targetGroupFullName,
+      }),
+      ...props,
+    }).attachTo(this);
   }
 }
 

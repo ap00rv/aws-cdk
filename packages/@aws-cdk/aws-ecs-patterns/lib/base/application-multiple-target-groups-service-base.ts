@@ -8,7 +8,12 @@ import { ApplicationListener, ApplicationLoadBalancer, ApplicationProtocol, Appl
 import { IRole } from '@aws-cdk/aws-iam';
 import { ARecord, IHostedZone, RecordTarget } from '@aws-cdk/aws-route53';
 import { LoadBalancerTarget } from '@aws-cdk/aws-route53-targets';
-import { CfnOutput, Construct, Duration, Stack } from '@aws-cdk/core';
+import { CfnOutput, Duration, Stack } from '@aws-cdk/core';
+import { Construct } from 'constructs';
+
+// v2 - keep this import as a separate section to reduce merge conflict when forward merging with the v2 branch.
+// eslint-disable-next-line
+import { Construct as CoreConstruct } from '@aws-cdk/core';
 
 /**
  * The properties for the base ApplicationMultipleTargetGroupsEc2Service or ApplicationMultipleTargetGroupsFargateService service.
@@ -323,7 +328,7 @@ export interface ApplicationListenerProps {
 /**
  * The base class for ApplicationMultipleTargetGroupsEc2Service and ApplicationMultipleTargetGroupsFargateService classes.
  */
-export abstract class ApplicationMultipleTargetGroupsServiceBase extends Construct {
+export abstract class ApplicationMultipleTargetGroupsServiceBase extends CoreConstruct {
 
   /**
    * The desired number of instantiations of the task definition to keep running on the service.
@@ -473,10 +478,8 @@ export abstract class ApplicationMultipleTargetGroupsServiceBase extends Constru
    * Create log driver if logging is enabled.
    */
   private createLogDriver(enableLoggingProp?: boolean, logDriverProp?: LogDriver): LogDriver | undefined {
-    const enableLogging = enableLoggingProp !== undefined ? enableLoggingProp : true;
-    const logDriver = logDriverProp !== undefined
-      ? logDriverProp : enableLogging
-        ? this.createAWSLogDriver(this.node.id) : undefined;
+    const enableLogging = enableLoggingProp ?? true;
+    const logDriver = logDriverProp ?? (enableLogging ? this.createAWSLogDriver(this.node.id) : undefined);
     return logDriver;
   }
 
@@ -517,7 +520,7 @@ export abstract class ApplicationMultipleTargetGroupsServiceBase extends Constru
   }
 
   private createLoadBalancer(name: string, publicLoadBalancer?: boolean): ApplicationLoadBalancer {
-    const internetFacing = publicLoadBalancer !== undefined ? publicLoadBalancer : true;
+    const internetFacing = publicLoadBalancer ?? true;
     const lbProps = {
       vpc: this.cluster.vpc,
       internetFacing,
@@ -527,7 +530,7 @@ export abstract class ApplicationMultipleTargetGroupsServiceBase extends Constru
   }
 
   private createListenerProtocol(listenerProtocol?: ApplicationProtocol, certificate?: ICertificate): ApplicationProtocol {
-    return listenerProtocol !== undefined ? listenerProtocol : (certificate ? ApplicationProtocol.HTTPS : ApplicationProtocol.HTTP);
+    return listenerProtocol ?? (certificate ? ApplicationProtocol.HTTPS : ApplicationProtocol.HTTP);
   }
 
   private createListenerCertificate(listenerName: string, certificate?: ICertificate, domainName?: string, domainZone?: IHostedZone): ICertificate {

@@ -1,8 +1,13 @@
 import { ScalingInterval } from '@aws-cdk/aws-applicationautoscaling';
 import { IVpc } from '@aws-cdk/aws-ec2';
-import { AwsLogDriver, BaseService, Cluster, ContainerImage, ICluster, LogDriver, PropagatedTagSource, Secret } from '@aws-cdk/aws-ecs';
+import { AwsLogDriver, BaseService, Cluster, ContainerImage, DeploymentController, ICluster, LogDriver, PropagatedTagSource, Secret } from '@aws-cdk/aws-ecs';
 import { IQueue, Queue } from '@aws-cdk/aws-sqs';
-import { CfnOutput, Construct, Duration, Stack } from '@aws-cdk/core';
+import { CfnOutput, Duration, Stack } from '@aws-cdk/core';
+import { Construct } from 'constructs';
+
+// v2 - keep this import as a separate section to reduce merge conflict when forward merging with the v2 branch.
+// eslint-disable-next-line
+import { Construct as CoreConstruct } from '@aws-cdk/core';
 
 /**
  * The properties for the base QueueProcessingEc2Service or QueueProcessingFargateService service.
@@ -165,12 +170,20 @@ export interface QueueProcessingServiceBaseProps {
    * @default - default from underlying service.
    */
   readonly minHealthyPercent?: number;
+
+  /**
+   * Specifies which deployment controller to use for the service. For more information, see
+   * [Amazon ECS Deployment Types](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-types.html)
+   *
+   * @default - Rolling update (ECS)
+   */
+  readonly deploymentController?: DeploymentController;
 }
 
 /**
  * The base class for QueueProcessingEc2Service and QueueProcessingFargateService services.
  */
-export abstract class QueueProcessingServiceBase extends Construct {
+export abstract class QueueProcessingServiceBase extends CoreConstruct {
   /**
    * The SQS queue that the service will process from
    */
@@ -249,22 +262,18 @@ export abstract class QueueProcessingServiceBase extends Construct {
 
     // Setup autoscaling scaling intervals
     const defaultScalingSteps = [{ upper: 0, change: -1 }, { lower: 100, change: +1 }, { lower: 500, change: +5 }];
-    this.scalingSteps = props.scalingSteps !== undefined ? props.scalingSteps : defaultScalingSteps;
+    this.scalingSteps = props.scalingSteps ?? defaultScalingSteps;
 
     // Create log driver if logging is enabled
-    const enableLogging = props.enableLogging !== undefined ? props.enableLogging : true;
-    this.logDriver = props.logDriver !== undefined
-      ? props.logDriver
-      : enableLogging
-        ? this.createAWSLogDriver(this.node.id)
-        : undefined;
+    const enableLogging = props.enableLogging ?? true;
+    this.logDriver = props.logDriver ?? (enableLogging ? this.createAWSLogDriver(this.node.id) : undefined);
 
     // Add the queue name to environment variables
     this.environment = { ...(props.environment || {}), QUEUE_NAME: this.sqsQueue.queueName };
     this.secrets = props.secrets;
 
     // Determine the desired task count (minimum) and maximum scaling capacity
-    this.desiredCount = props.desiredTaskCount !== undefined ? props.desiredTaskCount : 1;
+    this.desiredCount = props.desiredTaskCount ?? 1;
     this.maxCapacity = props.maxScalingCapacity || (2 * this.desiredCount);
 
     if (!this.desiredCount && !this.maxCapacity) {

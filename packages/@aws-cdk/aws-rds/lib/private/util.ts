@@ -1,7 +1,23 @@
 import * as iam from '@aws-cdk/aws-iam';
 import * as s3 from '@aws-cdk/aws-s3';
-import { Construct, CfnDeletionPolicy, CfnResource, RemovalPolicy } from '@aws-cdk/core';
+import { CfnDeletionPolicy, CfnResource, RemovalPolicy } from '@aws-cdk/core';
+import { DatabaseSecret } from '../database-secret';
 import { IEngine } from '../engine';
+import { Credentials } from '../props';
+
+// keep this import separate from other imports to reduce chance for merge conflicts with v2-main
+// eslint-disable-next-line no-duplicate-imports, import/order
+import { Construct } from '@aws-cdk/core';
+
+/**
+ * The default set of characters we exclude from generated passwords for database users.
+ * It's a combination of characters that have a tendency to cause problems in shell scripts,
+ * some engine-specific characters (for example, Oracle doesn't like '@' in its passwords),
+ * and some that trip up other services, like DMS.
+ *
+ * This constant is private to the RDS module.
+ */
+export const DEFAULT_PASSWORD_EXCLUDE_CHARS = " %+~`#$&*()|[]{}:;<>?!'/@\"\\";
 
 /** Common base of `DatabaseInstanceProps` and `DatabaseClusterBaseProps` that has only the S3 props */
 export interface DatabaseS3ImportExportProps {
@@ -76,7 +92,29 @@ export function applyRemovalPolicy(cfnDatabase: CfnResource, removalPolicy?: Rem
  * Enable if explicitly provided or if the RemovalPolicy has been set to RETAIN
  */
 export function defaultDeletionProtection(deletionProtection?: boolean, removalPolicy?: RemovalPolicy): boolean | undefined {
-  return deletionProtection !== undefined
-    ? deletionProtection
-    : (removalPolicy === RemovalPolicy.RETAIN ? true : undefined);
+  return deletionProtection ?? (removalPolicy === RemovalPolicy.RETAIN ? true : undefined);
+}
+
+/**
+ * Renders the credentials for an instance or cluster
+ */
+export function renderCredentials(scope: Construct, engine: IEngine, credentials?: Credentials): Credentials {
+  let renderedCredentials = credentials ?? Credentials.fromUsername(engine.defaultUsername ?? 'admin'); // For backwards compatibilty
+
+  if (!renderedCredentials.secret && !renderedCredentials.password) {
+    renderedCredentials = Credentials.fromSecret(
+      new DatabaseSecret(scope, 'Secret', {
+        username: renderedCredentials.username,
+        encryptionKey: renderedCredentials.encryptionKey,
+        excludeCharacters: renderedCredentials.excludeCharacters,
+        // if username must be referenced as a string we can safely replace the
+        // secret when customization options are changed without risking a replacement
+        replaceOnPasswordCriteriaChanges: credentials?.usernameAsString,
+      }),
+      // pass username if it must be referenced as a string
+      credentials?.usernameAsString ? renderedCredentials.username : undefined,
+    );
+  }
+
+  return renderedCredentials;
 }

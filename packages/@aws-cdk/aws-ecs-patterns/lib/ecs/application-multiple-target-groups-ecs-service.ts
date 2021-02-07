@@ -1,6 +1,6 @@
 import { Ec2Service, Ec2TaskDefinition } from '@aws-cdk/aws-ecs';
 import { ApplicationTargetGroup } from '@aws-cdk/aws-elasticloadbalancingv2';
-import { Construct } from '@aws-cdk/core';
+import { Construct } from 'constructs';
 import {
   ApplicationMultipleTargetGroupsServiceBase,
   ApplicationMultipleTargetGroupsServiceBaseProps,
@@ -94,7 +94,7 @@ export class ApplicationMultipleTargetGroupsEc2Service extends ApplicationMultip
         taskRole: taskImageOptions.taskRole,
       });
 
-      const containerName = taskImageOptions.containerName !== undefined ? taskImageOptions.containerName : 'web';
+      const containerName = taskImageOptions.containerName ?? 'web';
       const container = this.taskDefinition.addContainer(containerName, {
         image: taskImageOptions.image,
         cpu: props.cpu,
